@@ -114,7 +114,10 @@
             function setSlideItemStyles(content) {
                 const items = content.children;
                 for (let i = 0; i < items.length; i++) {
+                    // 设置元素的滚动快照对齐方式为中心，使其在滚动停止时位于屏幕中央
                     items[i].style.scrollSnapAlign = 'center';
+                    // 设置元素的滚动快照停止行为为“总是”，使元素在滚动时保持可见，直到到达下一个快照点
+                    items[i].style.scrollSnapStop = 'always';
                 }
             }
 
