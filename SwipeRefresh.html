@@ -17,7 +17,7 @@
       position: relative;
       background-color: #FFFFFF;
       border-radius: 16px;
-      box-shadow: 0 4px 15px 0 rgba(0, 0, 0, 0.1);
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
       margin: 20px;
     }
 
@@ -56,11 +56,10 @@
       <p>更多内容...</p>
       <p>更多内容...</p>
       <p>更多内容...</p>
+      <button onclick="document.querySelector('swipe-refresh').triggerRefresh(true)">手动触发刷新（加载动画）</button>
+      <button onclick="document.querySelector('swipe-refresh').triggerRefresh(false)">手动触发刷新（不加载动画）</button>
     </div>
   </swipe-refresh>
-
-  <button onclick="document.querySelector('swipe-refresh').triggerRefresh(true)">手动触发刷新（加载动画）</button>
-  <button onclick="document.querySelector('swipe-refresh').triggerRefresh(false)">手动触发刷新（不加载动画）</button>
 
   <script>
     class SwipeRefresh extends HTMLElement {
@@ -73,10 +72,6 @@
               height: 100vh;
               overflow-y: auto;
               position: relative;
-              background-color: #FFFFFF;
-              border-radius: 16px;
-              box-shadow: 0 4px 15px 0 rgba(0, 0, 0, 0.1);
-              margin: 20px;
             }
 
             .content {
@@ -95,13 +90,14 @@
               z-index: 1;
               background-color: #FFFFFF;
               border-radius: 50%;
-              box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.1);
+              box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
               transition: transform 0.3s ease; /* 平滑过渡 */
             }
 
             .spinner {
               border: 3px solid rgba(0, 0, 0, 0.1);
-              border-top-color: #6200EE; /* 使用  主色调 */
+              box-sizing: border-box;
+              border-top-color: #6200EE;
               border-radius: 50%;
               width: 100%;
               height: 100%;
@@ -133,6 +129,7 @@
         this.refreshFunction = null;
         this.isDragging = false; // 新增标志位
         this.diff = 0;
+        this.timeoutId = null; // 用于定时器
 
         this.handleStart = this.handleStart.bind(this);
         this.handleMove = this.handleMove.bind(this);
@@ -152,12 +149,16 @@
       }
 
       handleStart(event) {
+        event.preventDefault();
         this.isDragging = true;
         this.startY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+        this.clearTimeout(); // 清除之前的定时器
       }
 
       handleMove(event) {
+        event.preventDefault();
         if (!this.isDragging || this.isRefreshing) return;
+        this.shadowRoot.querySelector('.content').style.pointerEvents = "none";
         this.currentY = 'touches' in event ? event.touches[0].clientY : event.clientY;
         const diff = Math.min(this.currentY - this.startY, this.maxDragDistance);
 
@@ -170,15 +171,21 @@
         }
 
         this.diff = diff;
+        this.clearTimeout(); // 清除之前的定时器
+        this.setTimeout(event); // 设置新的定时器
       }
 
       handleEnd(event) {
         if (!this.isDragging || this.isRefreshing) return;
         if (this.diff > this.threshold && this.container.scrollTop === 0) {
           this.showRefreshIndicator();
+        } else {
+          this.hideRefreshIndicator()
         }
+        this.shadowRoot.querySelector('.content').style.pointerEvents = "unset";
         this.diff = 0;
         this.isDragging = false; // 重置标志位
+        this.clearTimeout(); // 清除定时器
       }
 
       showRefreshIndicator() {
@@ -209,6 +216,19 @@
         } else {
           this.hideRefreshIndicator();
         }
+      }
+
+      clearTimeout() {
+        if (this.timeoutId) {
+          clearTimeout(this.timeoutId);
+          this.timeoutId = null;
+        }
+      }
+
+      setTimeout(event) {
+        this.timeoutId = setTimeout(() => {
+          this.handleEnd(event);
+        }, 2000); // 2秒后自动触发结束
       }
     }
 
