@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Swipe Refresh with Web Components</title>
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      background-color: #F4F4F4;
+    }
+
+    .container {
+      height: 100vh;
+      overflow-y: auto;
+      position: relative;
+      background-color: #FFFFFF;
+      border-radius: 16px;
+      box-shadow: 0 4px 15px 0 rgba(0, 0, 0, 0.1);
+      margin: 20px;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    button {
+      background-color: #6200EE;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Roboto', sans-serif;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #7c4dff;
+    }
+  </style>
+</head>
+
+<body>
+  <swipe-refresh>
+    <div class="content">
+      <p>这是主要内容。</p>
+      <p>更多内容...</p>
+      <p>更多内容...</p>
+      <p>更多内容...</p>
+      <p>更多内容...</p>
+      <p>更多内容...</p>
+      <p>更多内容...</p>
+      <p>更多内容...</p>
+      <p>更多内容...</p>
+      <p>更多内容...</p>
+    </div>
+  </swipe-refresh>
+
+  <button onclick="document.querySelector('swipe-refresh').triggerRefresh(true)">手动触发刷新（加载动画）</button>
+  <button onclick="document.querySelector('swipe-refresh').triggerRefresh(false)">手动触发刷新（不加载动画）</button>
+
+  <script>
+    class SwipeRefresh extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this.shadowRoot.innerHTML = `
+          <style>
+            .container {
+              height: 100vh;
+              overflow-y: auto;
+              position: relative;
+              background-color: #FFFFFF;
+              border-radius: 16px;
+              box-shadow: 0 4px 15px 0 rgba(0, 0, 0, 0.1);
+              margin: 20px;
+            }
+
+            .content {
+              padding: 20px;
+            }
+
+            .refresh-indicator {
+              position: absolute;
+              top: -30px; /* 使加载指示器位于容器上方 */
+              left: 50%;
+              transform: translateX(-50%);
+              width: 30px;
+              height: 30px;
+              display: none;
+              pointer-events: none; /* 避免遮挡内容 */
+              z-index: 1;
+              background-color: #FFFFFF;
+              border-radius: 50%;
+              box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.1);
+              transition: transform 0.3s ease; /* 平滑过渡 */
+            }
+
+            .spinner {
+              border: 3px solid rgba(0, 0, 0, 0.1);
+              border-top-color: #6200EE; /* 使用  主色调 */
+              border-radius: 50%;
+              width: 100%;
+              height: 100%;
+              animation: spin 1s linear infinite;
+            }
+
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          </style>
+          <div class="container">
+            <div class="refresh-indicator" id="refreshIndicator">
+              <div class="spinner"></div>
+            </div>
+            <div class="content" id="content">
+              <slot></slot>
+            </div>
+          </div>
+        `;
+
+        this.container = this.shadowRoot.querySelector('.container');
+        this.refreshIndicator = this.shadowRoot.querySelector('#refreshIndicator');
+        this.isRefreshing = false;
+        this.startY = 0;
+        this.currentY = 0;
+        this.threshold = 50; // 触发刷新的距离阈值
+        this.maxDragDistance = 100; // 最大拖动距离
+        this.refreshFunction = null;
+        this.isDragging = false; // 新增标志位
+        this.diff = 0;
+
+        this.handleStart = this.handleStart.bind(this);
+        this.handleMove = this.handleMove.bind(this);
+        this.handleEnd = this.handleEnd.bind(this);
+
+        this.container.addEventListener('touchstart', this.handleStart);
+        this.container.addEventListener('touchmove', this.handleMove);
+        this.container.addEventListener('touchend', this.handleEnd);
+
+        this.container.addEventListener('mousedown', this.handleStart);
+        this.container.addEventListener('mousemove', this.handleMove);
+        this.container.addEventListener('mouseup', this.handleEnd);
+      }
+
+      setRefreshFunction(func) {
+        this.refreshFunction = func;
+      }
+
+      handleStart(event) {
+        this.isDragging = true;
+        this.startY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+      }
+
+      handleMove(event) {
+        if (!this.isDragging || this.isRefreshing) return;
+        this.currentY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+        const diff = Math.min(this.currentY - this.startY, this.maxDragDistance);
+
+        if (diff > 10 && this.container.scrollTop === 0) {
+          this.refreshIndicator.style.display = 'block';
+          this.refreshIndicator.style.transform = `translateX(-50%) translateY(${diff}px)`;
+        } else {
+          this.refreshIndicator.style.display = 'none';
+          this.refreshIndicator.style.transform = 'translateX(-50%) translateY(0)';
+        }
+
+        this.diff = diff;
+      }
+
+      handleEnd(event) {
+        if (!this.isDragging || this.isRefreshing) return;
+        if (this.diff > this.threshold && this.container.scrollTop === 0) {
+          this.showRefreshIndicator();
+        }
+        this.diff = 0;
+        this.isDragging = false; // 重置标志位
+      }
+
+      showRefreshIndicator() {
+        if (this.isRefreshing) return;
+        this.refreshIndicator.style.display = 'block';
+        this.refreshIndicator.style.transform = `translateX(-50%) translateY(${this.threshold}px)`; // 固定位置
+        this.isRefreshing = true;
+        this.refreshData();
+      }
+
+      refreshData() {
+        if (this.refreshFunction) {
+          this.refreshFunction(() => {
+            this.hideRefreshIndicator();
+          });
+        }
+      }
+
+      hideRefreshIndicator() {
+        this.refreshIndicator.style.display = 'none';
+        this.refreshIndicator.style.transform = 'translateX(-50%) translateY(0)';
+        this.isRefreshing = false;
+      }
+
+      triggerRefresh(isRefreshing) {
+        if (isRefreshing) {
+          this.showRefreshIndicator();
+        } else {
+          this.hideRefreshIndicator();
+        }
+      }
+    }
+
+    customElements.define('swipe-refresh', SwipeRefresh);
+  </script>
+
+  <script>
+    // 设置刷新函数
+    document.querySelector('swipe-refresh').setRefreshFunction((callback) => {
+      console.log('刷新触发！');
+      // 模拟数据刷新
+      setTimeout(() => {
+        // 模拟数据更新后的操作
+        callback(); // 调用回调函数重置刷新状态
+      }, 1000); // 模拟1秒的延迟
+    });
+  </script>
+
+</body>
+
+</html>
